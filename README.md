@@ -1,37 +1,30 @@
 # OmcTextDecoder
-Decode / Encode Samsung Note 8 (SM-N950N) csc files
+Decode/Encode Samsung CSC files
 
 ## How To Use
-Download the latest jar file [here](https://github.com/fei-ke/OmcTextDecoder/releases)
+Download the latest binary [here](https://github.com/saadelasfur/OmcTextDecoder/releases/latest)
 
-deocode
-
-``` shell
-java -jar omc-decoder.jar -i cscfeature.xml -o cscfeature_decoded.xml
+Decode
+```shell
+./omc-decoder -i cscfeature.xml -o cscfeature_decoded.xml
 ```
-
 or try to decode all files under a directory
-
-``` shell
-java -jar omc-decoder.jar -i omc -o omc_decoded
+```shell
+./omc-decoder -i omc -o omc_decoded
 ```
 
-encode
-
+Encode
+```shell
+./omc-decoder -e -i cscfeature_decoded.xml -o cscfeature.xml
 ```
-java -jar omc-decoder.jar -e -i cscfeature_decoded.xml -o cscfeature.xml
-```
-
 or try to encode all files under a directory
-
-``` shell
-java -jar omc-decoder.jar -e -i omc_decoded -o omc_encoded
+```shell
+./omc-decoder -e -i omc_decoded -o omc_encoded
 ```
 
 ## How To Build
-
+```shell
+make
 ```
-./gradlew jar
-```
 
-then the jar file output to ```build/libs/```
+then the binary is output to `out/`
