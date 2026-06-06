@@ -1,7 +1,7 @@
 #ifndef OMC_TEXT_DECODER_H
 #define OMC_TEXT_DECODER_H
 
-#define VERSION "0.5"
+#define VERSION "1.0"
 
 #include <stddef.h>
 
