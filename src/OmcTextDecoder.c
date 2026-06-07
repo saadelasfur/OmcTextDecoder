@@ -171,7 +171,7 @@ unsigned char* compressGzip(const unsigned char* src, size_t srcLen, size_t* des
     return dest;
 }
 
-int isXmlEncoded(const char* filename) {
+int isFileEncoded(const char* filename) {
     FILE* f = fopen(filename, "r");
     if (!f)
         return 0;
@@ -182,6 +182,13 @@ int isXmlEncoded(const char* filename) {
     }
     fclose(f);
     if (strstr(header, "<?xml") != NULL)
+        return 0;
+
+    char* ptr = header;
+    while (*ptr == ' ' || *ptr == '\t' || *ptr == '\r' || *ptr == '\n') {
+        ptr++;
+    }
+    if (*ptr == '{' || *ptr == '[')
         return 0;
     return 1;
 }

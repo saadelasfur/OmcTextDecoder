@@ -56,7 +56,7 @@ void processFile(const char* inFile, const char* outFile, int decodeMode) {
     if (!realpath(outFile, outFilePath))
         snprintf(outFilePath, sizeof(outFilePath), "%s", outFile);
 
-    int isEncoded = isXmlEncoded(inFile);
+    int isEncoded = isFileEncoded(inFile);
     if (decodeMode && !isEncoded) {
         printf("Skipping %s: already decoded.\n", inFilePath);
         return;
