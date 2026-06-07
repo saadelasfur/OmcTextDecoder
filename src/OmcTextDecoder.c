@@ -211,11 +211,11 @@ unsigned char* readFile(const char* filename, size_t* length) {
 void getParentDirectory(const char* path, char* parent) {
     char temp[PATH_MAX];
     snprintf(temp, sizeof(temp), "%s", path);
-    
+
     for (int i = 0; temp[i]; i++)
         if (temp[i] == '\\')
             temp[i] = '/';
-    
+
     char* lastSlash = strrchr(temp, '/');
     if (lastSlash) {
         size_t len = lastSlash - temp;
@@ -234,11 +234,11 @@ void makeDirectoryRecursive(const char* path) {
     size_t len;
 
     snprintf(temp, sizeof(temp), "%s", path);
-    
+
     for (int i = 0; temp[i]; i++)
         if (temp[i] == '\\')
             temp[i] = '/';
-    
+
     len = strlen(temp);
     if (len == 0)
         return;

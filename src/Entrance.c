@@ -13,6 +13,9 @@ void processDirectory(const char* inDir, const char* outDir, int decodeMode) {
     DIR* dir = opendir(inDir);
     if (!dir)
         return;
+    char realOutDir[PATH_MAX] = {0};
+    realpath(outDir, realOutDir);
+
     struct dirent* entry;
     while ((entry = readdir(dir)) != NULL) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
@@ -20,6 +23,17 @@ void processDirectory(const char* inDir, const char* outDir, int decodeMode) {
         char subIn[PATH_MAX];
         char subOut[PATH_MAX];
         snprintf(subIn, sizeof(subIn), "%s/%s", inDir, entry->d_name);
+
+        char realSubIn[PATH_MAX];
+        if (realpath(subIn, realSubIn)) {
+            if (realOutDir[0] == '\0')
+                realpath(outDir, realOutDir);
+            if (realOutDir[0] != '\0' && strcmp(realSubIn, realOutDir) == 0)
+                continue;
+        } else if (strcmp(subIn, outDir) == 0) {
+            continue;
+        }
+
         snprintf(subOut, sizeof(subOut), "%s/%s", outDir, entry->d_name);
         processPath(subIn, subOut, decodeMode);
     }
@@ -34,10 +48,28 @@ void processPath(const char* inPath, const char* outPath, int decodeMode) {
 }
 
 void processFile(const char* inFile, const char* outFile, int decodeMode) {
+    char inFilePath[PATH_MAX];
+    if (!realpath(inFile, inFilePath))
+        snprintf(inFilePath, sizeof(inFilePath), "%s", inFile);
+
+    char outFilePath[PATH_MAX];
+    if (!realpath(outFile, outFilePath))
+        snprintf(outFilePath, sizeof(outFilePath), "%s", outFile);
+
+    int isEncoded = isXmlEncoded(inFile);
+    if (decodeMode && !isEncoded) {
+        printf("Skipping %s: already decoded.\n", inFilePath);
+        return;
+    }
+    if (!decodeMode && isEncoded) {
+        printf("Skipping %s: already encoded.\n", inFilePath);
+        return;
+    }
+
     size_t inLen = 0;
     unsigned char* inData = readFile(inFile, &inLen);
     if (!inData) {
-        fprintf(stderr, "Failed to read input file: %s\n", inFile);
+        fprintf(stderr, "Failed to read input file: %s\n", inFilePath);
         return;
     }
 
@@ -54,33 +86,30 @@ void processFile(const char* inFile, const char* outFile, int decodeMode) {
         unsigned char* compressed = compressGzip(inData, inLen, &outLen);
         free(inData);
         if (!compressed) {
-            fprintf(stderr, "Failed to compress gzip data for: %s\n", inFile);
+            fprintf(stderr, "Failed to compress gzip data for: %s\n", inFilePath);
             return;
         }
         encodeBuffer(compressed, outLen);
         outData = compressed;
     }
 
-    if (writeFile(outFile, outData, outLen)) {
-        char resolvedPath[PATH_MAX];
-        if (realpath(outFile, resolvedPath))
-            printf("output %s success\n", resolvedPath);
-        else
-            printf("output %s success\n", outFile);
-    }
+    if (writeFile(outFile, outData, outLen))
+        printf("Output %s: success\n", outFilePath);
+    else
+        fprintf(stderr, "Failed to write output file: %s\n", outFilePath);
     free(outData);
 }
 
 void getDefaultOutput(const char* inputPath, char* outputPath, size_t maxLen) {
     char parent[PATH_MAX];
     getParentDirectory(inputPath, parent);
-    
+
     char temp[PATH_MAX];
     snprintf(temp, sizeof(temp), "%s", inputPath);
     for (int i = 0; temp[i]; i++)
         if (temp[i] == '\\')
             temp[i] = '/';
-    
+
     const char* filename = strrchr(temp, '/');
     if (filename)
         filename++;
