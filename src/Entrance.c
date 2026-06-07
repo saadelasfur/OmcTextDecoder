@@ -105,6 +105,7 @@ void printHelp(const char* progName) {
     printf(" -d, --decode         decode omc file\n");
     printf(" -i, --input <arg>    input file or dir\n");
     printf(" -o, --output <arg>   output file or dir\n");
+    printf(" -p, --in-place       edit file(s) in place\n");
 }
 
 int main(int argc, char* argv[]) {
@@ -112,6 +113,7 @@ int main(int argc, char* argv[]) {
     char* inputPath = NULL;
     char* outputPath = NULL;
     char defaultOut[PATH_MAX] = {0};
+    int inPlace = 0;
 
     static struct option longOptions[] = {
         {"help", no_argument, 0, 'h'},
@@ -120,12 +122,13 @@ int main(int argc, char* argv[]) {
         {"decode", no_argument, 0, 'd'},
         {"input", required_argument, 0, 'i'},
         {"output", required_argument, 0, 'o'},
+        {"in-place", no_argument, 0, 'p'},
         {0, 0, 0, 0}
     };
 
     int opt;
     int optionIndex = 0;
-    while ((opt = getopt_long(argc, argv, "hvedi:o:", longOptions, &optionIndex)) != -1) {
+    while ((opt = getopt_long(argc, argv, "hvedi:o:p", longOptions, &optionIndex)) != -1) {
         switch (opt) {
             case 'h':
                 printHelp(argv[0]);
@@ -145,6 +148,9 @@ int main(int argc, char* argv[]) {
             case 'o':
                 outputPath = optarg;
                 break;
+            case 'p':
+                inPlace = 1;
+                break;
             default:
                 printHelp(argv[0]);
                 return 1;
@@ -156,7 +162,14 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    if (!outputPath) {
+    if (inPlace && outputPath) {
+        fprintf(stderr, "Error: Cannot use both --in-place (-p) and --output (-o)\n");
+        return 1;
+    }
+
+    if (inPlace) {
+        outputPath = inputPath;
+    } else if (!outputPath) {
         getDefaultOutput(inputPath, defaultOut, sizeof(defaultOut));
         outputPath = defaultOut;
     }
