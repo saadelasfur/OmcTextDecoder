@@ -4,10 +4,124 @@
 #include <getopt.h>
 #include <dirent.h>
 #include <string.h>
+#include <unistd.h>
 #include <OmcTextDecoder.h>
 
 void processFile(const char* inFile, const char* outFile, int decodeMode);
 void processPath(const char* inPath, const char* outPath, int decodeMode);
+void processDirectory(const char* inDir, const char* outDir, int decodeMode);
+
+static char** decodedFiles = NULL;
+static int decodedFilesCount = 0;
+static int decodedFilesCapacity = 0;
+static int hasDecodedList = 0;
+static const char* rootInDir = NULL;
+
+static int getRelativePath(const char* root, const char* path, char* relPath, size_t maxLen) {
+    char realRoot[PATH_MAX];
+    if (!realpath(root, realRoot))
+        snprintf(realRoot, sizeof(realRoot), "%s", root);
+    for (int i = 0; realRoot[i]; i++)
+        if (realRoot[i] == '\\') realRoot[i] = '/';
+
+    char realPath[PATH_MAX];
+    if (!realpath(path, realPath))
+        snprintf(realPath, sizeof(realPath), "%s", path);
+    for (int i = 0; realPath[i]; i++)
+        if (realPath[i] == '\\') realPath[i] = '/';
+
+    size_t rootLen = strlen(realRoot);
+    if (rootLen > 0 && realRoot[rootLen - 1] == '/') {
+        realRoot[rootLen - 1] = '\0';
+        rootLen--;
+    }
+
+    if (strlen(realPath) >= rootLen && strncasecmp(realPath, realRoot, rootLen) == 0) {
+        const char* p = realPath + rootLen;
+        while (*p == '/')
+            p++;
+        snprintf(relPath, maxLen, "%s", p);
+        return 1;
+    }
+    return 0;
+}
+
+static void addDecodedFile(const char* relPath) {
+    if (decodedFilesCount >= decodedFilesCapacity) {
+        decodedFilesCapacity = decodedFilesCapacity == 0 ? 64 : decodedFilesCapacity * 2;
+        char** new_arr = realloc(decodedFiles, decodedFilesCapacity * sizeof(char*));
+        if (!new_arr)
+            return;
+        decodedFiles = new_arr;
+    }
+
+    char normRel[PATH_MAX];
+    snprintf(normRel, sizeof(normRel), "%s", relPath);
+    for (int i = 0; normRel[i]; i++)
+        if (normRel[i] == '\\')
+            normRel[i] = '/';
+    decodedFiles[decodedFilesCount++] = strdup(normRel);
+}
+
+static void writeDecodedList(const char* outDir) {
+    if (decodedFilesCount == 0) return;
+
+    char listPath[PATH_MAX];
+    snprintf(listPath, sizeof(listPath), "%s/.decoded", outDir);
+
+    FILE* f = fopen(listPath, "w");
+    if (!f) return;
+
+    for (int i = 0; i < decodedFilesCount; i++)
+        fprintf(f, "%s\n", decodedFiles[i]);
+    fclose(f);
+}
+
+static void loadDecodedList(const char* inDir) {
+    char listPath[PATH_MAX];
+    snprintf(listPath, sizeof(listPath), "%s/.decoded", inDir);
+
+    FILE* f = fopen(listPath, "r");
+    if (!f) {
+        hasDecodedList = 0;
+        return;
+    }
+    hasDecodedList = 1;
+
+    char line[PATH_MAX];
+    while (fgets(line, sizeof(line), f)) {
+        size_t len = strlen(line);
+        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+            line[len - 1] = '\0';
+            len--;
+        }
+        if (len > 0)
+            addDecodedFile(line);
+    }
+    fclose(f);
+}
+
+static int isFileInDecodedList(const char* relPath) {
+    if (!hasDecodedList) return 1;
+
+    char normRel[PATH_MAX];
+    snprintf(normRel, sizeof(normRel), "%s", relPath);
+    for (int i = 0; normRel[i]; i++)
+        if (normRel[i] == '\\')
+            normRel[i] = '/';
+
+    for (int i = 0; i < decodedFilesCount; i++)
+        if (strcasecmp(decodedFiles[i], normRel) == 0)
+            return 1;
+
+    return 0;
+}
+
+static void deleteDecodedListFile(const char* inDir) {
+    char listPath[PATH_MAX];
+    snprintf(listPath, sizeof(listPath), "%s/.decoded", inDir);
+    unlink(listPath);
+}
 
 void processDirectory(const char* inDir, const char* outDir, int decodeMode) {
     DIR* dir = opendir(inDir);
@@ -19,6 +133,8 @@ void processDirectory(const char* inDir, const char* outDir, int decodeMode) {
     struct dirent* entry;
     while ((entry = readdir(dir)) != NULL) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+            continue;
+        if (strcmp(entry->d_name, ".decoded") == 0)
             continue;
         char subIn[PATH_MAX];
         char subOut[PATH_MAX];
@@ -55,6 +171,18 @@ void processFile(const char* inFile, const char* outFile, int decodeMode) {
     char outFilePath[PATH_MAX];
     if (!realpath(outFile, outFilePath))
         snprintf(outFilePath, sizeof(outFilePath), "%s", outFile);
+
+    char relPath[PATH_MAX] = {0};
+    int hasRelPath = 0;
+    if (rootInDir)
+        hasRelPath = getRelativePath(rootInDir, inFile, relPath, sizeof(relPath));
+
+    if (!decodeMode && hasDecodedList) {
+        if (hasRelPath && !isFileInDecodedList(relPath)) {
+            printf("Skipping %s: not in decoded files list\n", inFilePath);
+            return;
+        }
+    }
 
     int isEncoded = isFileEncoded(inFile);
     if (decodeMode && !isEncoded) {
@@ -93,10 +221,13 @@ void processFile(const char* inFile, const char* outFile, int decodeMode) {
         outData = compressed;
     }
 
-    if (writeFile(outFile, outData, outLen))
+    if (writeFile(outFile, outData, outLen)) {
         printf("Output %s: success\n", outFilePath);
-    else
+        if (decodeMode && rootInDir && hasRelPath)
+            addDecodedFile(relPath);
+    } else {
         fprintf(stderr, "Failed to write output file: %s\n", outFilePath);
+    }
     free(outData);
 }
 
@@ -203,6 +334,24 @@ int main(int argc, char* argv[]) {
         outputPath = defaultOut;
     }
 
+    int inputIsDir = isDirectory(inputPath);
+    if (inputIsDir)
+        rootInDir = inputPath;
+
+    if (!decodeMode && inputIsDir)
+        loadDecodedList(inputPath);
+
     processPath(inputPath, outputPath, decodeMode);
+
+    if (decodeMode && inputIsDir)
+        writeDecodedList(outputPath);
+
+    if (!decodeMode && inputIsDir && hasDecodedList)
+        deleteDecodedListFile(inputPath);
+
+    for (int i = 0; i < decodedFilesCount; i++)
+        free(decodedFiles[i]);
+    free(decodedFiles);
+
     return 0;
 }
