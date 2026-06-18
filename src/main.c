@@ -4,8 +4,7 @@
 #include <getopt.h>
 #include <dirent.h>
 #include <string.h>
-#include <unistd.h>
-#include <OmcTextDecoder.h>
+#include "omc_decoder.h"
 
 void processFile(const char* inFile, const char* outFile, int decodeMode);
 void processPath(const char* inPath, const char* outPath, int decodeMode);
@@ -120,13 +119,14 @@ static int isFileInDecodedList(const char* relPath) {
 static void deleteDecodedListFile(const char* inDir) {
     char listPath[PATH_MAX];
     snprintf(listPath, sizeof(listPath), "%s/.decoded", inDir);
-    unlink(listPath);
+    remove(listPath);
 }
 
 void processDirectory(const char* inDir, const char* outDir, int decodeMode) {
     DIR* dir = opendir(inDir);
     if (!dir)
         return;
+
     char realOutDir[PATH_MAX] = {0};
     realpath(outDir, realOutDir);
 
@@ -136,8 +136,8 @@ void processDirectory(const char* inDir, const char* outDir, int decodeMode) {
             continue;
         if (strcmp(entry->d_name, ".decoded") == 0)
             continue;
+
         char subIn[PATH_MAX];
-        char subOut[PATH_MAX];
         snprintf(subIn, sizeof(subIn), "%s/%s", inDir, entry->d_name);
 
         char realSubIn[PATH_MAX];
@@ -150,6 +150,7 @@ void processDirectory(const char* inDir, const char* outDir, int decodeMode) {
             continue;
         }
 
+        char subOut[PATH_MAX];
         snprintf(subOut, sizeof(subOut), "%s/%s", outDir, entry->d_name);
         processPath(subIn, subOut, decodeMode);
     }
@@ -177,20 +178,19 @@ void processFile(const char* inFile, const char* outFile, int decodeMode) {
     if (rootInDir)
         hasRelPath = getRelativePath(rootInDir, inFile, relPath, sizeof(relPath));
 
-    if (!decodeMode && hasDecodedList) {
+    if (!decodeMode && hasDecodedList)
         if (hasRelPath && !isFileInDecodedList(relPath)) {
             printf("Skipping %s: not in decoded files list\n", inFilePath);
             return;
         }
-    }
 
     int isEncoded = isFileEncoded(inFile);
     if (decodeMode && !isEncoded) {
-        printf("Skipping %s: already decoded.\n", inFilePath);
+        printf("Skipping %s: already decoded\n", inFilePath);
         return;
     }
     if (!decodeMode && isEncoded) {
-        printf("Skipping %s: already encoded.\n", inFilePath);
+        printf("Skipping %s: already encoded\n", inFilePath);
         return;
     }
 
@@ -203,7 +203,6 @@ void processFile(const char* inFile, const char* outFile, int decodeMode) {
 
     unsigned char* outData = NULL;
     size_t outLen = 0;
-
     if (decodeMode) {
         decodeBuffer(inData, inLen);
         outData = decompressGzip(inData, inLen, &outLen);

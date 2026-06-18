@@ -7,7 +7,6 @@
 #include <unistd.h>
 #include <limits.h>
 #include <zlib.h>
-#include <OmcTextDecoder.h>
 
 #define CHUNK 16384
 
@@ -98,7 +97,6 @@ unsigned char* decompressGzip(const unsigned char* src, size_t srcLen, size_t* d
     memset(&strm, 0, sizeof(strm));
     strm.next_in = (Bytef*)src;
     strm.avail_in = srcLen;
-
     if (inflateInit2(&strm, 16 + MAX_WBITS) != Z_OK)
         return NULL;
 
@@ -145,7 +143,6 @@ unsigned char* compressGzip(const unsigned char* src, size_t srcLen, size_t* des
     memset(&strm, 0, sizeof(strm));
     strm.next_in = (Bytef*)src;
     strm.avail_in = srcLen;
-
     if (deflateInit2(&strm, Z_BEST_COMPRESSION, Z_DEFLATED, 16 + MAX_WBITS, 8, Z_DEFAULT_STRATEGY) != Z_OK)
         return NULL;
 
@@ -175,21 +172,23 @@ int isFileEncoded(const char* filename) {
     FILE* f = fopen(filename, "r");
     if (!f)
         return 0;
+
     char header[256];
     if (fgets(header, sizeof(header), f) == NULL) {
         fclose(f);
         return 0;
     }
     fclose(f);
+
     if (strstr(header, "<?xml") != NULL)
         return 0;
 
     char* ptr = header;
-    while (*ptr == ' ' || *ptr == '\t' || *ptr == '\r' || *ptr == '\n') {
+    while (*ptr == ' ' || *ptr == '\t' || *ptr == '\r' || *ptr == '\n')
         ptr++;
-    }
     if (*ptr == '{' || *ptr == '[')
         return 0;
+
     return 1;
 }
 
@@ -197,6 +196,7 @@ unsigned char* readFile(const char* filename, size_t* length) {
     FILE* f = fopen(filename, "rb");
     if (!f)
         return NULL;
+
     fseek(f, 0, SEEK_END);
     long size = ftell(f);
     if (size < 0) {
@@ -204,11 +204,13 @@ unsigned char* readFile(const char* filename, size_t* length) {
         return NULL;
     }
     fseek(f, 0, SEEK_SET);
+
     unsigned char* buf = malloc(size > 0 ? size : 1);
     if (!buf) {
         fclose(f);
         return NULL;
     }
+
     size_t readBytes = fread(buf, 1, size, f);
     fclose(f);
     *length = readBytes;
@@ -218,7 +220,6 @@ unsigned char* readFile(const char* filename, size_t* length) {
 void getParentDirectory(const char* path, char* parent) {
     char temp[PATH_MAX];
     snprintf(temp, sizeof(temp), "%s", path);
-
     for (int i = 0; temp[i]; i++)
         if (temp[i] == '\\')
             temp[i] = '/';
@@ -233,31 +234,29 @@ void getParentDirectory(const char* path, char* parent) {
     }
 }
 
-void makeDirectoryRecursive(const char* path) {
+static void makeDirectoryRecursive(const char* path) {
     if (strlen(path) == 0 || strcmp(path, ".") == 0 || strcmp(path, "..") == 0)
         return;
+
     char temp[PATH_MAX];
-    char* p = NULL;
-    size_t len;
-
     snprintf(temp, sizeof(temp), "%s", path);
-
     for (int i = 0; temp[i]; i++)
         if (temp[i] == '\\')
             temp[i] = '/';
 
-    len = strlen(temp);
+    size_t len = strlen(temp);
     if (len == 0)
         return;
     if (temp[len - 1] == '/')
         temp[len - 1] = 0;
-    for (p = temp + 1; *p; p++) {
+
+    char* p = NULL;
+    for (p = temp + 1; *p; p++)
         if (*p == '/') {
             *p = 0;
             mkdir(temp, 0755);
             *p = '/';
         }
-    }
     mkdir(temp, 0755);
 }
 
@@ -269,6 +268,7 @@ int writeFile(const char* filename, const unsigned char* data, size_t length) {
     FILE* f = fopen(filename, "wb");
     if (!f)
         return 0;
+
     size_t written = fwrite(data, 1, length, f);
     fclose(f);
     return written == length;

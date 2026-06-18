@@ -1,5 +1,5 @@
-#ifndef OMC_TEXT_DECODER_H
-#define OMC_TEXT_DECODER_H
+#ifndef OMC_DECODER_H
+#define OMC_DECODER_H
 
 #define VERSION "1.5"
 
@@ -14,6 +14,5 @@ unsigned char* readFile(const char* filename, size_t* length);
 int writeFile(const char* filename, const unsigned char* data, size_t length);
 int isDirectory(const char* path);
 void getParentDirectory(const char* path, char* parent);
-void makeDirectoryRecursive(const char* path);
 
 #endif
